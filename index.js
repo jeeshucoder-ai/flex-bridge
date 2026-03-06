@@ -1,33 +1,36 @@
-export default {
-  async fetch(request, env) {
-    const botToken = env.BOT_TOKEN;
-    const url = new URL(request.url);
+const { Buffer } = require('buffer');
 
-    // 1. Browser Test Link
-    if (url.searchParams.has('file')) {
-        const fileId = url.searchParams.get('file');
-        return Response.redirect(`https://api.telegram.org/file/bot${botToken}/${fileId}`, 302);
+module.exports = async (req, res) => {
+  const botToken = process.env.BOT_TOKEN;
+
+  // 1. Bot Message Handling (POST Request)
+  if (req.method === 'POST') {
+    const update = req.body;
+    if (update && update.message) {
+      const chatId = update.message.chat.id;
+      const fileId = update.message.video?.file_id || update.message.document?.file_id;
+
+      if (fileId) {
+        const text = `🎯 **Flex Cinema ID:**\n\n\`${fileId}\``;
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'Markdown' })
+        });
+      }
     }
-
-    // 2. Bot Message Handling
-    if (request.method === "POST") {
-      try {
-        const update = await request.json();
-        if (update.message) {
-          const chatId = update.message.chat.id;
-          const file_id = update.message.video?.file_id || update.message.document?.file_id || "No File ID";
-          
-          let responseText = `🎯 Flex Cinema World:\n\nID: \`${file_id}\``;
-          
-          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, text: responseText, parse_mode: "Markdown" })
-          });
-        }
-      } catch (e) {}
-    }
-
-    return new Response("Bridge is Active 🚀");
+    return res.status(200).send('OK');
   }
+
+  // 2. Browser Stream Handling (GET Request)
+  const fileId = req.query.file;
+  if (fileId) {
+    const getFile = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+    const data = await getFile.json();
+    if (data.ok) {
+      return res.redirect(`https://api.telegram.org/file/bot${botToken}/${data.result.file_path}`);
+    }
+  }
+
+  res.send("Flex Cinema Bridge is Ready 🚀");
 };
